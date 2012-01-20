@@ -185,6 +185,7 @@
       'unique':true,
       removeWithBackspace:true,
       placeholderColor:'#666666',
+      placeholderClass:false,
       autosize: true,
       comfortZone: 20,
       inputPadding: 6*2
@@ -226,11 +227,12 @@
 
 			$(data.holder).css('width',settings.width);
 			$(data.holder).css('height',settings.height);
+            settings.placeholderClass && $(data.holder).addClass(settings.placeholderClass);
 	
 			if ($(data.real_input).val()!='') { 
 				$.fn.tagsInput.importTags($(data.real_input),$(data.real_input).val());
 			}		
-			if (settings.interactive) { 
+			if (settings.interactive) {
 				$(data.fake_input).val($(data.fake_input).attr('data-default'));
 				$(data.fake_input).css('color',settings.placeholderColor);
 		        $(data.fake_input).resetAutosize(settings);
