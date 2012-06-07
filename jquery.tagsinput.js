@@ -12,6 +12,7 @@
 
 	ben@xoxco.com
 
+
 */
 
 (function($) {
@@ -41,9 +42,8 @@
 	    if (isValidWidthChange) {
 	        input.width(newWidth);
 	    }
-
-
   };
+  
   $.fn.resetAutosize = function(options){
     // alert(JSON.stringify(options));
     var minWidth =  $(this).data('minwidth') || options.minInputWidth || $(this).width(),
@@ -73,10 +73,25 @@
     input.css('width', minWidth);
   };
   
+  function updateAddTag(id){
+      var o = $('#' + id + '_addTag');
+      
+      var s = $.fn.tagsInput.getStore(id);
+      var l = $('#' + id + '_tagsinput .tag').length;
+      
+      if(l > s.maxTags){
+          o.hide();
+      } else {
+          o.show();
+      }
+  }
+  
 	$.fn.addTag = function(value,options) {
 			options = jQuery.extend({focus:false,callback:true},options);
 			this.each(function() { 
 				var id = $(this).attr('id');
+                
+                var s = $.fn.tagsInput.getStore(id);
 
 				var tagslist = $(this).val().split(delimiter[id]);
 				if (tagslist[0] == '') { 
@@ -94,8 +109,29 @@
 				} else {
 					var skipTag = false; 
 				}
+                
+                // Validate for count
+                if (!skipTag && s.maxTags) {
+                    var l = $('#' + id + '_tagsinput .tag').length;
+                    if(l >= s.maxTags){
+                        skipTag = true;
+                    }
+				}
+                
+                
+                // Validaiton callback
+                if (!skipTag && typeof (s.validationCb) == 'function')  {
+					var r = s.validationCb(value);
+                    if(typeof r == 'boolean'){
+                        // Skip tag if the validation fails
+                        skipTag = !r
+                    } else {
+                        // Return the new value
+                        value = r
+                    }
+				}
 				
-				if (value !='' && skipTag != true) { 
+				if (value !='' && skipTag != true) {
                     $('<span>').addClass('tag').append(
                         $('<span>').text(value).append('&nbsp;&nbsp;'),
                         $('<a>', {
@@ -112,7 +148,7 @@
 					$('#'+id+'_tag').val('');
 					if (options.focus) {
 						$('#'+id+'_tag').focus();
-					} else {		
+					} else {
 						$('#'+id+'_tag').blur();
 					}
 					
@@ -128,24 +164,29 @@
 						var f = tags_callbacks[id]['onChange'];
 						f.call(this, $(this), tagslist[i-1]);
 					}					
-				}
+				} else {
+                    $('#'+id+'_tag').addClass('not_valid');
+                }
+                updateAddTag(id);
 		
 			});		
 			
 			return false;
 		};
 		
-	$.fn.removeTag = function(value) { 
+	$.fn.removeTag = function(value) {
 			value = unescape(value);
 			this.each(function() { 
 				var id = $(this).attr('id');
-	
+                var s = $.fn.tagsInput.getStore(id);
 				var old = $(this).val().split(delimiter[id]);
 					
 				$('#'+id+'_tagsinput .tag').remove();
-				str = '';
+                $('#' + id + '_addTag input').attr('data-default',s.defaultText);
+				
+                str = '';
 				for (i=0; i< old.length; i++) { 
-					if (old[i]!=value) { 
+					if (old[i]!=value) {
 						str = str + delimiter[id] +old[i];
 					}
 				}
@@ -157,7 +198,7 @@
 					f.call(this, value);
 				}
 			});
-					
+			updateAddTag(id);
 			return false;
 		};
 	
@@ -172,14 +213,14 @@
 		$.fn.tagsInput.importTags(this,str);
 	}
 		
-	$.fn.tagsInput = function(options) { 
+	$.fn.tagsInput = function(options) {
     var settings = jQuery.extend({
       interactive:true,
       defaultText:'add a tag',
       minChars:0,
       width:'300px',
       height:'100px',
-      autocomplete: {selectFirst: false },
+      autocomplete: {selectFirst: false},
       'hide':true,
       'delimiter':',',
       'unique':true,
@@ -188,17 +229,21 @@
       placeholderClass:false,
       autosize: true,
       comfortZone: 20,
-      inputPadding: 6*2
+      inputPadding: 6*2,
+      validationCb: false,
+      maxTags: false
     },options);
 
-		this.each(function() { 
+		this.each(function() {
 			if (settings.hide) { 
 				$(this).hide();				
 			}
 				
 			var id = $(this).attr('id')
+            
+            $.fn.tagsInput.setStore(id, settings);
 			
-			var data = jQuery.extend({
+            var data = jQuery.extend({
 				pid:id,
 				real_input: '#'+id,
 				holder: '#'+id+'_tagsinput',
@@ -225,11 +270,11 @@
 			
 			$(markup).insertAfter(this);
 
-			$(data.holder).css('width',settings.width);
-			$(data.holder).css('height',settings.height);
+			settings.width && $(data.holder).css('width',settings.width);
+			settings.height && $(data.holder).css('height',settings.height);
             settings.placeholderClass && $(data.holder).addClass(settings.placeholderClass);
 	
-			if ($(data.real_input).val()!='') { 
+			if ($(data.real_input).val()!='') {
 				$.fn.tagsInput.importTags($(data.real_input),$(data.real_input).val());
 			}		
 			if (settings.interactive) {
@@ -258,13 +303,13 @@
 						$(data.fake_input).autocomplete(settings.autocomplete_url, settings.autocomplete);
 						$(data.fake_input).bind('result',data,function(event,data,formatted) {
 							if (data) {
-								$('#'+id).addTag(data[0] + "",{focus:true,unique:(settings.unique)});
+								$('#'+id).addTag(data[0] + "",{focus:true,unique:(settings.unique), settings: settings});
 							}
 					  	});
 					} else if (jQuery.ui.autocomplete !== undefined) {
 						$(data.fake_input).autocomplete(autocomplete_options);
 						$(data.fake_input).bind('autocompleteselect',data,function(event,ui) {
-							$(event.data.real_input).addTag(ui.item.value,{focus:true,unique:(settings.unique)});
+							$(event.data.real_input).addTag(ui.item.value,{focus:true,unique:(settings.unique), settings: settings});
 							return false;
 						});
 					}
@@ -277,7 +322,7 @@
 							var d = $(this).attr('data-default');
 							if ($(event.data.fake_input).val()!='' && $(event.data.fake_input).val()!=d) { 
 								if( (event.data.minChars <= $(event.data.fake_input).val().length) && (!event.data.maxChars || (event.data.maxChars >= $(event.data.fake_input).val().length)) )
-									$(event.data.real_input).addTag($(event.data.fake_input).val(),{focus:true,unique:(settings.unique)});
+									$(event.data.real_input).addTag($(event.data.fake_input).val(),{focus:true,unique:(settings.unique), settings: settings});
 							} else {
 								$(event.data.fake_input).val($(event.data.fake_input).attr('data-default'));
 								$(event.data.fake_input).css('color',settings.placeholderColor);
@@ -291,7 +336,7 @@
 					if (event.which==event.data.delimiter.charCodeAt(0) || event.which==13 ) {
 					    event.preventDefault();
 						if( (event.data.minChars <= $(event.data.fake_input).val().length) && (!event.data.maxChars || (event.data.maxChars >= $(event.data.fake_input).val().length)) )
-							$(event.data.real_input).addTag($(event.data.fake_input).val(),{focus:true,unique:(settings.unique)});
+							$(event.data.real_input).addTag($(event.data.fake_input).val(),{focus:true,unique:(settings.unique), settings: settings});
 					  	$(event.data.fake_input).resetAutosize(settings);
 						return false;
 					} else if (event.data.autosize) {
@@ -330,16 +375,16 @@
 	
 	};
 	
-	$.fn.tagsInput.updateTagsField = function(obj,tagslist) { 
+	$.fn.tagsInput.updateTagsField = function(obj,tagslist) {
 		var id = $(obj).attr('id');
 		$(obj).val(tagslist.join(delimiter[id]));
 	};
 	
-	$.fn.tagsInput.importTags = function(obj,val) {			
+	$.fn.tagsInput.importTags = function(obj,val) {
 		$(obj).val('');
 		var id = $(obj).attr('id');
 		var tags = val.split(delimiter[id]);
-		for (i=0; i<tags.length; i++) { 
+		for (i=0; i<tags.length; i++) {
 			$(obj).addTag(tags[i],{focus:false,callback:false});
 		}
 		if(tags_callbacks[id] && tags_callbacks[id]['onChange'])
@@ -347,6 +392,16 @@
 			var f = tags_callbacks[id]['onChange'];
 			f.call(obj, obj, tags[i]);
 		}
+	};
+    
+    var store = {};
+    
+    $.fn.tagsInput.setStore = function(id,settings) {
+        store[id] = settings
+	};
+    
+    $.fn.tagsInput.getStore = function(id) {
+        return store[id] || false;
 	};
 
 })(jQuery);
